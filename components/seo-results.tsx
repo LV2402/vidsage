@@ -5,6 +5,15 @@ import { TabsContainer } from "./seo-tabs";
 export async function SeoResults({ url }: { url: string }) {
   const results = await analyzeSeo(url);
 
+  if (results.issues.length > 0 && results.issues[0].title === "Access Forbidden") {
+    return (
+      <div className="neo-card bg-white text-center p-8 rotate-1">
+        <p className="text-xl font-bold mb-4">{results.issues[0].title}</p>
+        <p className="text-lg">{results.issues[0].description}</p>
+      </div>
+    );
+  }
+
   // Calculate overall score
   const overallScore = Math.round(
     (results.metaTagsScore +

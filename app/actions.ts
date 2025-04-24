@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import axios from "axios";
 
 export async function submitUrl(data: any, formData: FormData) {
   const url = formData.get("url") as string;
@@ -9,162 +10,232 @@ export async function submitUrl(data: any, formData: FormData) {
     return { error: "Please enter a URL" };
   }
 
-  let formattedUrl = url;
-  if (!url.startsWith("http://") && !url.startsWith("https://")) {
-    formattedUrl = `https://${url}`;
+  let formattedUrl = url.trim();
+  
+  // More robust URL validation and formatting
+  if (!formattedUrl.match(/^https?:\/\//i)) {
+    formattedUrl = `https://${formattedUrl}`;
   }
 
   try {
     // Validate URL
-    new URL(formattedUrl);
-
-    console.log(formattedUrl);
+    const urlObj = new URL(formattedUrl);
+    
+    // Ensure we have a valid hostname
+    if (!urlObj.hostname) {
+      return { error: "Please enter a valid URL with a hostname" };
+    }
+    
+    console.log(`Processing URL: ${formattedUrl}`);
     // Redirect to results page
     redirect(`/results?url=${encodeURIComponent(formattedUrl)}`);
   } catch (err) {
-    console.log(err);
+    console.error("URL validation error:", err);
     return { error: "Please enter a valid URL" };
   }
 }
 
 export async function analyzeSeo(url: string) {
+  console.log(`Starting SEO analysis for: ${url}`);
   try {
+    // Use environment variable instead of hardcoded key
+    const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+    
+    if (!GEMINI_API_KEY) {
+      console.error("GEMINI_API_KEY is not available");
+      throw new Error("API key not available");
+    }
+    
+    // Validate URL before proceeding
+    try {
+      new URL(url);
+    } catch (err) {
+      throw new Error(`Invalid URL format: ${url}`);
+    }
+    
     // Fetch the website content
     const response = await fetch(url, {
       headers: {
-        "User-Agent": "SEO-Inspector-Bot/1.0",
+        "User-Agent": "Mozilla/5.0 (compatible; VidsageBot/1.0)",
       },
+      // Add timeout to avoid hanging requests
+      signal: AbortSignal.timeout(30000), // 30 seconds timeout
     });
 
     if (!response.ok) {
+      if (response.status === 403) {
+        console.error(
+          `403 Forbidden: Access to ${url} is blocked. Check if the website has restrictions.`
+        );
+        return {
+          metaTagsScore: 0,
+          contentScore: 0,
+          performanceScore: 0,
+          mobileScore: 0,
+          issues: [
+            {
+              title: "Access Forbidden",
+              description: `Access to the website (${url}) is blocked. Please check if the website has restrictions or try another URL.`,
+              severity: "high",
+            },
+          ],
+          recommendations: [],
+          metaTagsDetails: [],
+          contentDetails: [],
+          technicalDetails: [],
+        };
+      }
       throw new Error(`Failed to fetch website: ${response.status}`);
     }
 
+    // Extract meaningful text from the HTML
     const html = await response.text();
+    console.log(`Retrieved ${html.length} bytes of HTML`);
+    
+    const text = stripHtml(html);
+    console.log(`Extracted ${text.length} characters of text`);
 
-    // Extract basic SEO elements
-    const title = extractTag(html, "title");
-    const metaDescription = extractMetaTag(html, "description");
-    const h1Tags = extractAllTags(html, "h1");
-    const h2Tags = extractAllTags(html, "h2");
-    const imgTags = extractAllImgTags(html);
+    // Prepare prompt for Gemini
+    const prompt = `
+You are an SEO expert. Analyze the following website content for SEO best practices, meta tags, content quality, performance, and mobile-friendliness.
 
-    // Prepare data for AI analysis
-    const seoData = {
-      url,
-      title,
-      metaDescription,
-      h1Count: h1Tags.length,
-      h1Tags: h1Tags.slice(0, 5), // Limit to first 5 for brevity
-      h2Count: h2Tags.length,
-      h2Tags: h2Tags.slice(0, 5), // Limit to first 5 for brevity
-      imgCount: imgTags.length,
-      imagesWithoutAlt: imgTags.filter((img) => !img.alt).length,
-      wordCount: countWords(stripHtml(html)),
-      hasCanonical: html.includes('rel="canonical"'),
-      hasSitemap: html.toLowerCase().includes("sitemap"),
-      hasRobotsTxt: html.toLowerCase().includes("robots.txt"),
-      hasSchema:
-        html.includes("application/ld+json") || html.includes("itemtype="),
-      hasFavicon:
-        html.includes('rel="icon"') || html.includes('rel="shortcut icon"'),
-      hasViewport: html.includes('name="viewport"'),
-      hasHttps: url.startsWith("https://"),
-    };
+RESPONSE FORMAT: You must return ONLY a valid JSON object with no comments, explanations or markdown formatting - just pure JSON data with these exact properties:
+- metaTagsScore (number between 0-100)
+- contentScore (number between 0-100)
+- performanceScore (number between 0-100)
+- mobileScore (number between 0-100)
+- issues (array of objects with title, description, and severity properties, where severity is "high", "medium", or "low")
+- recommendations (array of objects with title, description, and impact properties, where impact is "high", "medium", or "low")
+- metaTagsDetails (array of objects with name, value, and status properties, where status is "good", "warning", or "bad")
+- contentDetails (array of objects with name, value, and status properties)
+- technicalDetails (array of objects with name, value, and status properties)
 
-    const openaiResponse = await fetch(
-      "https://api.openai.com/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+Website content:
+${text.slice(0, 10000)}
+    `.trim();
+
+    // Use axios for more reliable API calling
+    try {
+      // Updated Gemini API endpoint and structure
+      const geminiResponse = await axios.post(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+        {
+          contents: [
+            {
+              parts: [{ text: prompt }]
+            }
+          ],
+          generationConfig: {
+            temperature: 0.2,
+            maxOutputTokens: 2048,
+            topP: 0.8,
+            topK: 40
+            // Removed invalid responseFormat parameter
+          }
         },
-        body: JSON.stringify({
-          model: "gpt-4o-mini",
-          messages: [
-            {
-              role: "system",
-              content:
-                "You are an SEO expert assistant. Analyze the website data and provide SEO recommendations.",
-            },
-            {
-              role: "user",
-              content: `
-              Analyze this website's SEO data and provide a assessment with scores, issues, and recommendations:
-              ${JSON.stringify(seoData, null, 2)}
-              
-              Return only a JSON object with the following structure:
-              {
-                "metaTagsScore": number (0-100),
-                "contentScore": number (0-100),
-                "performanceScore": number (0-100),
-                "mobileScore": number (0-100),
-                "issues": [
-                  {
-                    "title": string,
-                    "description": string,
-                    "severity": "high" | "medium" | "low"
-                  }
-                ],
-                "recommendations": [
-                  {
-                    "title": string,
-                    "description": string,
-                    "impact": "high" | "medium" | "low"
-                  }
-                ],
-                "metaTagsDetails": [
-                  {
-                    "name": string,
-                    "value": string,
-                    "status": "good" | "warning" | "bad"
-                  }
-                ],
-                "contentDetails": [
-                  {
-                    "name": string,
-                    "value": string,
-                    "status": "good" | "warning" | "bad"
-                  }
-                ],
-                "technicalDetails": [
-                  {
-                    "name": string,
-                    "value": string,
-                    "status": "good" | "warning" | "bad"
-                  }
-                ]
+        {
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        }
+      );
+      
+      console.log("Gemini API response status:", geminiResponse.status);
+      
+      // Parse Gemini response
+      let analysisResult: any = {};
+      try {
+        // Extract text from the response based on Gemini API structure
+        const rawText = geminiResponse.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (rawText) {
+          // Extract JSON from the response text
+          let jsonStr = "";
+          try {
+            // Try to find a JSON object in the response using regex
+            const jsonMatch = rawText.match(/(\{[\s\S]*\})/);
+            if (jsonMatch) {
+              jsonStr = jsonMatch[0];
+            } else {
+              // If no regex match, try to clean the text
+              jsonStr = rawText
+                .replace(/```json/g, '')
+                .replace(/```/g, '')
+                .trim();
+            }
+            
+            // Parse the JSON string
+            analysisResult = JSON.parse(jsonStr);
+            
+            // Ensure all required fields exist
+            const requiredFields = ['metaTagsScore', 'contentScore', 'performanceScore', 'mobileScore', 
+                                   'issues', 'recommendations', 'metaTagsDetails', 'contentDetails', 'technicalDetails'];
+            for (const field of requiredFields) {
+              if (!(field in analysisResult)) {
+                if (field.endsWith('Score')) {
+                  analysisResult[field] = 0;
+                } else {
+                  analysisResult[field] = [];
+                }
               }
-              
-              Provide detailed, actionable recommendations. Be specific about what needs to be improved and how.
-            `,
+            }
+          } catch (jsonError) {
+            console.error("JSON parsing error:", jsonError);
+            // Fallback to simple object with error info
+            analysisResult = {
+              metaTagsScore: 60,
+              contentScore: 60,
+              performanceScore: 60,
+              mobileScore: 60,
+              issues: [
+                {
+                  title: "Response Format Error",
+                  description: "The AI couldn't generate a proper analysis format. Try again or check the URL.",
+                  severity: "medium",
+                }
+              ],
+              recommendations: [
+                {
+                  title: "Try Again",
+                  description: "Sometimes the AI might need another attempt to analyze the website correctly.",
+                  impact: "medium",
+                }
+              ],
+              metaTagsDetails: [],
+              contentDetails: [],
+              technicalDetails: [],
+            };
+          }
+        } else {
+          throw new Error("No text content in Gemini response");
+        }
+      } catch (e) {
+        console.error("Failed to parse Gemini response as JSON:", e);
+        analysisResult = {
+          metaTagsScore: 0,
+          contentScore: 0,
+          performanceScore: 0,
+          mobileScore: 0,
+          issues: [
+            {
+              title: "Gemini API Error",
+              description: "Could not parse Gemini API response.",
+              severity: "high",
             },
           ],
-          max_tokens: 2000,
-        }),
+          recommendations: [],
+          metaTagsDetails: [],
+          contentDetails: [],
+          technicalDetails: [],
+        };
       }
-    );
 
-    if (!openaiResponse.ok) {
-      throw new Error(`OpenAI API error: ${openaiResponse.status}`);
+      return analysisResult;
+    } catch (apiError: any) {
+      console.error("Gemini API error:", apiError.response?.status, apiError.response?.data || apiError.message);
+      throw new Error(`Gemini API error: ${apiError.response?.status || "Unknown"} - ${apiError.response?.data?.error?.message || apiError.message}`);
     }
-
-    const openaiData = await openaiResponse.json();
-    let content = openaiData.choices[0].message.content.trim();
-
-    // Remove potential Markdown code block
-    if (content.startsWith("```json")) {
-      content = content.slice(7, -3).trim(); // Remove ```json and ```
-    }
-    console.log(content);
-    const analysisResult = JSON.parse(content);
-
-    return analysisResult;
   } catch (error) {
     console.error("Error analyzing SEO:", error);
-
-    // Return a fallback response with error information
     return {
       metaTagsScore: 0,
       contentScore: 0,
@@ -172,24 +243,14 @@ export async function analyzeSeo(url: string) {
       mobileScore: 0,
       issues: [
         {
-          title: "Error analyzing website",
-          description: `We encountered an error while analyzing this website: ${
-            error instanceof Error ? error.message : "Unknown error"
-          }`,
-          severity: "high",
-        },
+          title: "Analysis Error",
+          description: error instanceof Error ? error.message : "Unknown error occurred",
+          severity: "high"
+        }
       ],
-      recommendations: [
-        {
-          title: "Check website accessibility",
-          description:
-            "Make sure the website is publicly accessible and not blocking our crawler.",
-          impact: "high",
-        },
-      ],
-      metaTagsDetails: [],
-      contentDetails: [],
-      technicalDetails: [],
+      recommendations: [],
+      overallScore: 0,
+      url
     };
   }
 }
