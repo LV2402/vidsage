@@ -6,7 +6,7 @@ export default function Home() {
       <div className="w-full max-w-3xl mx-auto">
         <div className="text-center space-y-2 mt-24 mb-12">
           <h1 className="text-4xl md:text-6xl font-black tracking-tight uppercase">
-            LogsPector
+            VidSage
           </h1>
           <p className="text-xl font-bold">
             Check your website's SEO performance
