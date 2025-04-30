@@ -11,7 +11,7 @@ export async function submitUrl(data: any, formData: FormData) {
   }
 
   let formattedUrl = url.trim();
-  
+
   // More robust URL validation and formatting
   if (!formattedUrl.match(/^https?:\/\//i)) {
     formattedUrl = `https://${formattedUrl}`;
@@ -20,12 +20,12 @@ export async function submitUrl(data: any, formData: FormData) {
   try {
     // Validate URL
     const urlObj = new URL(formattedUrl);
-    
+
     // Ensure we have a valid hostname
     if (!urlObj.hostname) {
       return { error: "Please enter a valid URL with a hostname" };
     }
-    
+
     console.log(`Processing URL: ${formattedUrl}`);
     // Redirect to results page
     redirect(`/results?url=${encodeURIComponent(formattedUrl)}`);
@@ -40,19 +40,19 @@ export async function analyzeSeo(url: string) {
   try {
     // Use environment variable instead of hardcoded key
     const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-    
+
     if (!GEMINI_API_KEY) {
       console.error("GEMINI_API_KEY is not available");
       throw new Error("API key not available");
     }
-    
+
     // Validate URL before proceeding
     try {
       new URL(url);
     } catch (err) {
       throw new Error(`Invalid URL format: ${url}`);
     }
-    
+
     // Fetch the website content
     const response = await fetch(url, {
       headers: {
@@ -91,7 +91,7 @@ export async function analyzeSeo(url: string) {
     // Extract meaningful text from the HTML
     const html = await response.text();
     console.log(`Retrieved ${html.length} bytes of HTML`);
-    
+
     const text = stripHtml(html);
     console.log(`Extracted ${text.length} characters of text`);
 
@@ -136,37 +136,39 @@ ${text.slice(0, 12000)}
         {
           contents: [
             {
-              parts: [{ text: prompt }]
-            }
+              parts: [{ text: prompt }],
+            },
           ],
           generationConfig: {
             temperature: 0.2,
             maxOutputTokens: 2048,
             topP: 0.8,
-            topK: 40
-            // Removed invalid responseFormat parameter
-          }
+            topK: 40,
+          },
         },
         {
           headers: {
-            'Content-Type': 'application/json',
-          }
+            "Content-Type": "application/json",
+          },
         }
       );
-      
+
       console.log("Gemini API response status:", geminiResponse.status);
-      
+
       // Parse Gemini response
       let analysisResult: any = {};
       try {
         // Extract text from the response based on Gemini API structure
-        const rawText = geminiResponse.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+        const rawText =
+          geminiResponse.data?.candidates?.[0]?.content?.parts?.[0]?.text;
         if (rawText) {
           // Extract JSON from the response using more robust methods
           let jsonStr = "";
           try {
             // First try to find a JSON object between code blocks
-            const jsonMatch = rawText.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
+            const jsonMatch = rawText.match(
+              /```(?:json)?\s*(\{[\s\S]*?\})\s*```/
+            );
             if (jsonMatch) {
               jsonStr = jsonMatch[1];
             } else {
@@ -177,63 +179,90 @@ ${text.slice(0, 12000)}
               } else {
                 // If no JSON found, clean the text and try again
                 jsonStr = rawText
-                  .replace(/```json/g, '')
-                  .replace(/```/g, '')
+                  .replace(/```json/g, "")
+                  .replace(/```/g, "")
                   .trim();
               }
             }
-            
+
             // Parse the JSON string
             analysisResult = JSON.parse(jsonStr);
-            
+
             // Validate and enhance response data
             // Ensure all required fields exist with the correct types
             const requiredFields = [
-              'metaTagsScore', 'contentScore', 'performanceScore', 'mobileScore', 
-              'issues', 'recommendations', 'metaTagsDetails', 'contentDetails', 'technicalDetails'
+              "metaTagsScore",
+              "contentScore",
+              "performanceScore",
+              "mobileScore",
+              "issues",
+              "recommendations",
+              "metaTagsDetails",
+              "contentDetails",
+              "technicalDetails",
             ];
-            
+
             // Type checking and fixing
             for (const field of requiredFields) {
               if (!(field in analysisResult)) {
-                if (field.endsWith('Score')) {
+                if (field.endsWith("Score")) {
                   analysisResult[field] = 60; // Default to medium score instead of 0
                 } else {
                   analysisResult[field] = [];
                 }
               }
-              
+
               // Ensure scores are numbers between 0-100
-              if (field.endsWith('Score') && typeof analysisResult[field] === 'string') {
-                analysisResult[field] = parseInt(analysisResult[field], 10) || 60;
+              if (
+                field.endsWith("Score") &&
+                typeof analysisResult[field] === "string"
+              ) {
+                analysisResult[field] =
+                  parseInt(analysisResult[field], 10) || 60;
               }
-              
+
               // Cap scores between 0-100
-              if (field.endsWith('Score')) {
-                analysisResult[field] = Math.max(0, Math.min(100, analysisResult[field]));
+              if (field.endsWith("Score")) {
+                analysisResult[field] = Math.max(
+                  0,
+                  Math.min(100, analysisResult[field])
+                );
               }
             }
-            
+
             // Ensure arrays have the correct structure
             const validateArray = (arr: any[], template: any) => {
               if (!Array.isArray(arr)) return [];
-              return arr.filter(item => {
-                return typeof item === 'object' && 
-                       Object.keys(template).every(key => key in item);
+              return arr.filter((item) => {
+                return (
+                  typeof item === "object" &&
+                  Object.keys(template).every((key) => key in item)
+                );
               });
             };
-            
-            analysisResult.issues = validateArray(analysisResult.issues, 
-              { title: '', description: '', severity: '' });
-            analysisResult.recommendations = validateArray(analysisResult.recommendations, 
-              { title: '', description: '', impact: '' });
-            analysisResult.metaTagsDetails = validateArray(analysisResult.metaTagsDetails, 
-              { name: '', value: '', status: '' });
-            analysisResult.contentDetails = validateArray(analysisResult.contentDetails, 
-              { name: '', value: '', status: '' });
-            analysisResult.technicalDetails = validateArray(analysisResult.technicalDetails, 
-              { name: '', value: '', status: '' });
-              
+
+            analysisResult.issues = validateArray(analysisResult.issues, {
+              title: "",
+              description: "",
+              severity: "",
+            });
+            analysisResult.recommendations = validateArray(
+              analysisResult.recommendations,
+              { title: "", description: "", impact: "" }
+            );
+            analysisResult.metaTagsDetails = validateArray(
+              analysisResult.metaTagsDetails,
+              { name: "", value: "", status: "" }
+            );
+            analysisResult.contentDetails = validateArray(
+              analysisResult.contentDetails,
+              { name: "", value: "", status: "" }
+            );
+            analysisResult.technicalDetails = validateArray(
+              analysisResult.technicalDetails,
+              { name: "", value: "", status: "" }
+            );
+
             // Add URL to the result
             analysisResult.url = url;
           } catch (jsonError) {
@@ -247,21 +276,24 @@ ${text.slice(0, 12000)}
               issues: [
                 {
                   title: "Analysis Format Error",
-                  description: "We couldn't generate a complete analysis format. The results shown are partial and may not reflect the full SEO status of your website.",
+                  description:
+                    "We couldn't generate a complete analysis format. The results shown are partial and may not reflect the full SEO status of your website.",
                   severity: "medium",
-                }
+                },
               ],
               recommendations: [
                 {
                   title: "Try a Focused Analysis",
-                  description: "For better results, try analyzing specific aspects of your website separately, such as meta tags or content structure.",
+                  description:
+                    "For better results, try analyzing specific aspects of your website separately, such as meta tags or content structure.",
                   impact: "medium",
                 },
                 {
                   title: "Manual SEO Audit",
-                  description: "Consider performing a manual SEO audit using tools like Google Search Console, PageSpeed Insights, or SEMrush for more detailed results.",
+                  description:
+                    "Consider performing a manual SEO audit using tools like Google Search Console, PageSpeed Insights, or SEMrush for more detailed results.",
                   impact: "high",
-                }
+                },
               ],
               metaTagsDetails: [],
               contentDetails: [],
@@ -282,21 +314,24 @@ ${text.slice(0, 12000)}
           issues: [
             {
               title: "Analysis Error",
-              description: "We encountered an error while analyzing your website. This could be due to complex website structure or API limitations.",
+              description:
+                "We encountered an error while analyzing your website. This could be due to complex website structure or API limitations.",
               severity: "high",
             },
           ],
           recommendations: [
             {
               title: "Try Again Later",
-              description: "Our AI analysis system may be experiencing high demand. Please try again in a few minutes.",
+              description:
+                "Our AI analysis system may be experiencing high demand. Please try again in a few minutes.",
               impact: "medium",
             },
             {
               title: "Use Alternative SEO Tools",
-              description: "Consider using specialized SEO tools like Ahrefs, Moz, or Google PageSpeed Insights for more reliable analysis.",
+              description:
+                "Consider using specialized SEO tools like Ahrefs, Moz, or Google PageSpeed Insights for more reliable analysis.",
               impact: "high",
-            }
+            },
           ],
           metaTagsDetails: [],
           contentDetails: [],
@@ -307,10 +342,10 @@ ${text.slice(0, 12000)}
 
       // Calculate and add overall score
       const scores = [
-        analysisResult.metaTagsScore || 0, 
-        analysisResult.contentScore || 0, 
-        analysisResult.performanceScore || 0, 
-        analysisResult.mobileScore || 0
+        analysisResult.metaTagsScore || 0,
+        analysisResult.contentScore || 0,
+        analysisResult.performanceScore || 0,
+        analysisResult.mobileScore || 0,
       ];
       analysisResult.overallScore = Math.round(
         scores.reduce((sum, score) => sum + score, 0) / scores.length
@@ -318,8 +353,16 @@ ${text.slice(0, 12000)}
 
       return analysisResult;
     } catch (apiError: any) {
-      console.error("Gemini API error:", apiError.response?.status, apiError.response?.data || apiError.message);
-      throw new Error(`Gemini API error: ${apiError.response?.status || "Unknown"} - ${apiError.response?.data?.error?.message || apiError.message}`);
+      console.error(
+        "Gemini API error:",
+        apiError.response?.status,
+        apiError.response?.data || apiError.message
+      );
+      throw new Error(
+        `Gemini API error: ${apiError.response?.status || "Unknown"} - ${
+          apiError.response?.data?.error?.message || apiError.message
+        }`
+      );
     }
   } catch (error) {
     console.error("Error analyzing SEO:", error);
@@ -331,13 +374,14 @@ ${text.slice(0, 12000)}
       issues: [
         {
           title: "Analysis Error",
-          description: error instanceof Error ? error.message : "Unknown error occurred",
-          severity: "high"
-        }
+          description:
+            error instanceof Error ? error.message : "Unknown error occurred",
+          severity: "high",
+        },
       ],
       recommendations: [],
       overallScore: 0,
-      url
+      url,
     };
   }
 }
@@ -358,50 +402,9 @@ function extractMetaTag(html: string, name: string): string {
   return match ? (match[1] || match[2] || "").trim() : "";
 }
 
-function extractAllTags(html: string, tag: string): string[] {
-  const regex = new RegExp(`<${tag}[^>]*>(.*?)<\/${tag}>`, "gi");
-  const matches = html.matchAll(regex);
-  const results: string[] = [];
-
-  for (const match of matches) {
-    if (match[1]) {
-      results.push(match[1].trim());
-    }
-  }
-
-  return results;
-}
-
-function extractAllImgTags(html: string): { src: string; alt: string }[] {
-  const regex =
-    /<img[^>]*src=["']([^"']*)["'][^>]*alt=["']([^"']*)["'][^>]*>|<img[^>]*alt=["']([^"']*)["'][^>]*src=["']([^"']*)["'][^>]*>/gi;
-  const matches = html.matchAll(regex);
-  const results: { src: string; alt: string }[] = [];
-
-  for (const match of matches) {
-    if (match[1]) {
-      results.push({
-        src: match[1],
-        alt: match[2] || "",
-      });
-    } else if (match[4]) {
-      results.push({
-        src: match[4],
-        alt: match[3] || "",
-      });
-    }
-  }
-
-  return results;
-}
-
 function stripHtml(html: string): string {
   return html
     .replace(/<[^>]*>/g, " ")
     .replace(/\s+/g, " ")
     .trim();
-}
-
-function countWords(text: string): number {
-  return text.split(/\s+/).filter(Boolean).length;
 }

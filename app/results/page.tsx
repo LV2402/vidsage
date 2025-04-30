@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { SeoResults } from "@/components/seo-results";
+import { SeoResults } from "@/app/components/seo-results";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import Link from "next/link";
 

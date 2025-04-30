@@ -1,4 +1,4 @@
-import { SeoForm } from "@/components/seo-form";
+import { SeoForm } from "@/app/components/seo-form";
 
 export default function Home() {
   return (
