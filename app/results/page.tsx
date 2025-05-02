@@ -6,9 +6,9 @@ import Link from "next/link";
 export default async function ResultsPage({
   searchParams,
 }: {
-  searchParams: { url?: string };
+  searchParams: Promise<{ url?: string }>;
 }) {
-  const url = (await searchParams).url || "";
+  const { url = "" } = await searchParams;
 
   return (
     <main className="min-h-screen p-4 md:p-8 bg-[#FFDE59]">
