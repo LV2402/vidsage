@@ -1,0 +1,6 @@
+{
+  "version": 2,
+  "buildCommand": "node update-lockfile.js && next build",
+  "installCommand": "pnpm install",
+  "framework": "nextjs"
+}
