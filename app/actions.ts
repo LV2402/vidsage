@@ -215,23 +215,24 @@ ${text.slice(0, 12000)}
           for (const field of requiredFields) {
             if (!(field in analysisResult)) {
               if (field.endsWith("Score")) {
-                analysisResult[field] = 60;
+                (analysisResult as any)[field] = 60;
               } else {
-                analysisResult[field] = [];
+                (analysisResult as any)[field] = [];
               }
             }
 
             if (
               field.endsWith("Score") &&
-              typeof analysisResult[field] === "string"
+              typeof (analysisResult as any)[field] === "string"
             ) {
-              analysisResult[field] = parseInt(analysisResult[field], 10) || 60;
+              (analysisResult as any)[field] =
+                parseInt((analysisResult as any)[field], 10) || 60;
             }
 
             if (field.endsWith("Score")) {
-              analysisResult[field] = Math.max(
+              (analysisResult as any)[field] = Math.max(
                 0,
-                Math.min(100, analysisResult[field])
+                Math.min(100, (analysisResult as any)[field])
               );
             }
           }
