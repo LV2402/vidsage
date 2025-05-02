@@ -7,9 +7,9 @@ export async function submitUrl(
   data: Record<string, unknown>,
   formData: FormData
 ) {
-  const url = formData.get("url") as string;
+  const url = formData.get("url");
 
-  if (!url) {
+  if (!url || typeof url !== "string") {
     return { error: "Please enter a URL" };
   }
 
@@ -36,6 +36,58 @@ export async function submitUrl(
     console.error("URL validation error:", error);
     return { error: "Please enter a valid URL" };
   }
+}
+
+interface AnalysisResult {
+  metaTagsScore: number;
+  contentScore: number;
+  performanceScore: number;
+  mobileScore: number;
+  issues: {
+    title: string;
+    description: string;
+    severity: string; // Changed from literal type to allow any string value
+  }[];
+  recommendations: {
+    title: string;
+    description: string;
+    impact: string; // Changed from literal type to allow any string value
+  }[];
+  metaTagsDetails: {
+    name: string;
+    value: string;
+    status: string; // Changed from literal type to allow any string value
+  }[];
+  contentDetails: {
+    name: string;
+    value: string;
+    status: string; // Changed from literal type to allow any string value
+  }[];
+  technicalDetails: {
+    name: string;
+    value: string;
+    status: string; // Changed from literal type to allow any string value
+  }[];
+  overallScore?: number;
+  url?: string;
+}
+
+interface GeminiResponseContent {
+  parts: { text: string }[];
+}
+
+interface GeminiResponseCandidate {
+  content: GeminiResponseContent;
+}
+
+interface GeminiApiResponse {
+  candidates?: GeminiResponseCandidate[];
+  data?: {
+    candidates?: GeminiResponseCandidate[];
+    error?: {
+      message?: string;
+    };
+  };
 }
 
 export async function analyzeSeo(url: string) {
@@ -148,57 +200,53 @@ ${text.slice(0, 12000)}
 
       console.log("Gemini API response status:", geminiResponse.status);
 
-      let analysisResult: {
-        metaTagsScore: number;
-        contentScore: number;
-        performanceScore: number;
-        mobileScore: number;
-        issues: { title: string; description: string; severity: string }[];
-        recommendations: {
-          title: string;
-          description: string;
-          impact: string;
-        }[];
-        metaTagsDetails: { name: string; value: string; status: string }[];
-        contentDetails: { name: string; value: string; status: string }[];
-        technicalDetails: { name: string; value: string; status: string }[];
-        overallScore?: number;
-        url?: string;
-      } = {
-        metaTagsScore: 0,
-        contentScore: 0,
-        performanceScore: 0,
-        mobileScore: 0,
+      const rawText =
+        geminiResponse?.data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+
+      interface ParsedResponse extends Partial<AnalysisResult> {
+        [key: string]: unknown;
+      }
+
+      let analysisResult: AnalysisResult = {
+        metaTagsScore: 60,
+        contentScore: 60,
+        performanceScore: 60,
+        mobileScore: 60,
         issues: [],
         recommendations: [],
         metaTagsDetails: [],
         contentDetails: [],
         technicalDetails: [],
+        overallScore: 0,
+        url,
       };
 
-      const rawText =
-        geminiResponse.data?.candidates?.[0]?.content?.parts?.[0]?.text;
       if (rawText) {
-        let jsonStr = "";
         try {
-          const jsonMatch = rawText.match(
-            /```(?:json)?\s*(\{[\s\S]*?\})\s*```/
-          );
-          if (jsonMatch) {
-            jsonStr = jsonMatch[1];
-          } else {
-            const rawJsonMatch = rawText.match(/(\{[\s\S]*\})/);
-            if (rawJsonMatch) {
-              jsonStr = rawJsonMatch[1];
-            } else {
-              jsonStr = rawText
-                .replace(/```json/g, "")
-                .replace(/```/g, "")
-                .trim();
-            }
-          }
+          const jsonStr = extractJsonFromText(rawText);
+          const parsedResult = JSON.parse(jsonStr) as ParsedResponse;
 
-          analysisResult = JSON.parse(jsonStr);
+          // Type-safe assignment of scores
+          if (typeof parsedResult.metaTagsScore === "number")
+            analysisResult.metaTagsScore = parsedResult.metaTagsScore;
+          if (typeof parsedResult.contentScore === "number")
+            analysisResult.contentScore = parsedResult.contentScore;
+          if (typeof parsedResult.performanceScore === "number")
+            analysisResult.performanceScore = parsedResult.performanceScore;
+          if (typeof parsedResult.mobileScore === "number")
+            analysisResult.mobileScore = parsedResult.mobileScore;
+
+          // Safely assign arrays
+          if (Array.isArray(parsedResult.issues))
+            analysisResult.issues = parsedResult.issues;
+          if (Array.isArray(parsedResult.recommendations))
+            analysisResult.recommendations = parsedResult.recommendations;
+          if (Array.isArray(parsedResult.metaTagsDetails))
+            analysisResult.metaTagsDetails = parsedResult.metaTagsDetails;
+          if (Array.isArray(parsedResult.contentDetails))
+            analysisResult.contentDetails = parsedResult.contentDetails;
+          if (Array.isArray(parsedResult.technicalDetails))
+            analysisResult.technicalDetails = parsedResult.technicalDetails;
 
           const requiredFields = [
             "metaTagsScore",
@@ -215,79 +263,125 @@ ${text.slice(0, 12000)}
           for (const field of requiredFields) {
             if (!(field in analysisResult)) {
               if (field.endsWith("Score")) {
-                (analysisResult as any)[field] = 60;
+                (analysisResult as Record<string, number | unknown[]>)[
+                  field
+                ] = 60;
               } else {
-                (analysisResult as any)[field] = [];
+                (analysisResult as Record<string, number | unknown[]>)[field] =
+                  [];
               }
             }
 
             if (
               field.endsWith("Score") &&
-              typeof (analysisResult as any)[field] === "string"
+              typeof (analysisResult as Record<string, number | string>)[
+                field
+              ] === "string"
             ) {
-              (analysisResult as any)[field] =
-                parseInt((analysisResult as any)[field], 10) || 60;
+              const scoreField = field as keyof Pick<
+                AnalysisResult,
+                | "metaTagsScore"
+                | "contentScore"
+                | "performanceScore"
+                | "mobileScore"
+              >;
+              (analysisResult as Record<string, number>)[scoreField] =
+                parseInt(
+                  (analysisResult as Record<string, string>)[field],
+                  10
+                ) || 60;
             }
 
             if (field.endsWith("Score")) {
-              (analysisResult as any)[field] = Math.max(
+              const scoreField = field as keyof Pick<
+                AnalysisResult,
+                | "metaTagsScore"
+                | "contentScore"
+                | "performanceScore"
+                | "mobileScore"
+              >;
+              (analysisResult as Record<string, number>)[scoreField] = Math.max(
                 0,
-                Math.min(100, (analysisResult as any)[field])
+                Math.min(
+                  100,
+                  (analysisResult as Record<string, number>)[scoreField]
+                )
               );
             }
           }
 
-          const validateArray = (
+          interface ValidatedItem {
+            [key: string]: string;
+          }
+
+          interface Issue {
+            title: string;
+            description: string;
+            severity: string; // Changed from literal type to allow any string value
+          }
+
+          interface Recommendation {
+            title: string;
+            description: string;
+            impact: string; // Changed from literal type to allow any string value
+          }
+
+          interface Detail {
+            name: string;
+            value: string;
+            status: string; // Changed from literal type to allow any string value
+          }
+
+          // Generic validator with better type checking for literal string values
+          const validateArray = <T extends ValidatedItem>(
             arr: unknown[],
-            template: Record<string, unknown>
-          ) => {
+            template: Record<keyof T, string>
+          ): T[] => {
             if (!Array.isArray(arr)) return [];
-            return arr.filter((item) => {
+            return arr.filter((item): item is T => {
               return (
                 typeof item === "object" &&
+                item !== null &&
                 Object.keys(template).every(
-                  (key) => key in (item as Record<string, unknown>)
+                  (key) =>
+                    key in item &&
+                    typeof (item as Record<string, unknown>)[key] === "string"
                 )
               );
             });
           };
 
-          analysisResult.issues = validateArray(analysisResult.issues, {
-            title: "",
-            description: "",
-            severity: "",
-          });
-          analysisResult.recommendations = validateArray(
-            analysisResult.recommendations,
-            {
+          // Update validation for specific types
+          const validateIssues = (arr: unknown[]): Issue[] =>
+            validateArray<Issue>(arr, {
+              title: "",
+              description: "",
+              severity: "",
+            });
+
+          const validateRecommendations = (arr: unknown[]): Recommendation[] =>
+            validateArray<Recommendation>(arr, {
               title: "",
               description: "",
               impact: "",
-            }
+            });
+
+          const validateDetails = (arr: unknown[]): Detail[] =>
+            validateArray<Detail>(arr, { name: "", value: "", status: "" });
+
+          // Update the validations
+          analysisResult.issues = validateIssues(analysisResult.issues);
+          analysisResult.recommendations = validateRecommendations(
+            analysisResult.recommendations
           );
-          analysisResult.metaTagsDetails = validateArray(
-            analysisResult.metaTagsDetails,
-            {
-              name: "",
-              value: "",
-              status: "",
-            }
+          analysisResult.metaTagsDetails = validateDetails(
+            analysisResult.metaTagsDetails
           );
-          analysisResult.contentDetails = validateArray(
-            analysisResult.contentDetails,
-            {
-              name: "",
-              value: "",
-              status: "",
-            }
+          analysisResult.contentDetails = validateDetails(
+            analysisResult.contentDetails
           );
-          analysisResult.technicalDetails = validateArray(
-            analysisResult.technicalDetails,
-            {
-              name: "",
-              value: "",
-              status: "",
-            }
+          analysisResult.technicalDetails = validateDetails(
+            analysisResult.technicalDetails
           );
 
           analysisResult.url = url;
@@ -359,6 +453,8 @@ ${text.slice(0, 12000)}
     }
   } catch (error) {
     console.error("Error analyzing SEO:", error);
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error occurred";
     return {
       metaTagsScore: 0,
       contentScore: 0,
@@ -367,12 +463,14 @@ ${text.slice(0, 12000)}
       issues: [
         {
           title: "Analysis Error",
-          description:
-            error instanceof Error ? error.message : "Unknown error occurred",
+          description: errorMessage,
           severity: "high",
         },
       ],
       recommendations: [],
+      metaTagsDetails: [],
+      contentDetails: [],
+      technicalDetails: [],
       overallScore: 0,
       url,
     };
@@ -384,4 +482,21 @@ function stripHtml(html: string): string {
     .replace(/<[^>]*>/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function extractJsonFromText(text: string): string {
+  const jsonMatch = text.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
+  if (jsonMatch) {
+    return jsonMatch[1];
+  } else {
+    const rawJsonMatch = text.match(/(\{[\s\S]*\})/);
+    if (rawJsonMatch) {
+      return rawJsonMatch[1];
+    } else {
+      return text
+        .replace(/```json/g, "")
+        .replace(/```/g, "")
+        .trim();
+    }
+  }
 }
