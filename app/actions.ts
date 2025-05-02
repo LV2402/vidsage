@@ -3,7 +3,10 @@
 import { redirect } from "next/navigation";
 import axios from "axios";
 
-export async function submitUrl(data: any, formData: FormData) {
+export async function submitUrl(
+  data: Record<string, unknown>,
+  formData: FormData
+) {
   const url = formData.get("url") as string;
 
   if (!url) {
@@ -29,8 +32,8 @@ export async function submitUrl(data: any, formData: FormData) {
     console.log(`Processing URL: ${formattedUrl}`);
     // Redirect to results page
     redirect(`/results?url=${encodeURIComponent(formattedUrl)}`);
-  } catch (err) {
-    console.error("URL validation error:", err);
+  } catch (error) {
+    console.error("URL validation error:", error);
     return { error: "Please enter a valid URL" };
   }
 }
@@ -38,7 +41,6 @@ export async function submitUrl(data: any, formData: FormData) {
 export async function analyzeSeo(url: string) {
   console.log(`Starting SEO analysis for: ${url}`);
   try {
-    // Use environment variable instead of hardcoded key
     const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
     if (!GEMINI_API_KEY) {
@@ -46,27 +48,22 @@ export async function analyzeSeo(url: string) {
       throw new Error("API key not available");
     }
 
-    // Validate URL before proceeding
     try {
       new URL(url);
-    } catch (err) {
+    } catch {
       throw new Error(`Invalid URL format: ${url}`);
     }
 
-    // Fetch the website content
     const response = await fetch(url, {
       headers: {
         "User-Agent": "Mozilla/5.0 (compatible; VidsageBot/1.0)",
       },
-      // Add timeout to avoid hanging requests
-      signal: AbortSignal.timeout(30000), // 30 seconds timeout
+      signal: AbortSignal.timeout(30000),
     });
 
     if (!response.ok) {
       if (response.status === 403) {
-        console.error(
-          `403 Forbidden: Access to ${url} is blocked. Check if the website has restrictions.`
-        );
+        console.error(`403 Forbidden: Access to ${url} is blocked.`);
         return {
           metaTagsScore: 0,
           contentScore: 0,
@@ -88,14 +85,12 @@ export async function analyzeSeo(url: string) {
       throw new Error(`Failed to fetch website: ${response.status}`);
     }
 
-    // Extract meaningful text from the HTML
     const html = await response.text();
     console.log(`Retrieved ${html.length} bytes of HTML`);
 
     const text = stripHtml(html);
     console.log(`Extracted ${text.length} characters of text`);
 
-    // Prepare prompt for Gemini
     const prompt = `
 You are an expert SEO consultant with years of experience optimizing websites for search engines. Analyze the following website content thoroughly for SEO best practices, providing specific and actionable insights.
 
@@ -128,9 +123,7 @@ Website content:
 ${text.slice(0, 12000)}
     `.trim();
 
-    // Use axios for more reliable API calling
     try {
-      // Updated Gemini API endpoint and structure
       const geminiResponse = await axios.post(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
         {
@@ -155,7 +148,6 @@ ${text.slice(0, 12000)}
 
       console.log("Gemini API response status:", geminiResponse.status);
 
-      // Parse Gemini response
       let analysisResult: {
         metaTagsScore: number;
         contentScore: number;
@@ -184,190 +176,153 @@ ${text.slice(0, 12000)}
         technicalDetails: [],
       };
 
-      try {
-        // Extract text from the response based on Gemini API structure
-        const rawText =
-          geminiResponse.data?.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (rawText) {
-          // Extract JSON from the response using more robust methods
-          let jsonStr = "";
-          try {
-            // First try to find a JSON object between code blocks
-            const jsonMatch = rawText.match(
-              /```(?:json)?\s*(\{[\s\S]*?\})\s*```/
-            );
-            if (jsonMatch) {
-              jsonStr = jsonMatch[1];
+      const rawText =
+        geminiResponse.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (rawText) {
+        let jsonStr = "";
+        try {
+          const jsonMatch = rawText.match(
+            /```(?:json)?\s*(\{[\s\S]*?\})\s*```/
+          );
+          if (jsonMatch) {
+            jsonStr = jsonMatch[1];
+          } else {
+            const rawJsonMatch = rawText.match(/(\{[\s\S]*\})/);
+            if (rawJsonMatch) {
+              jsonStr = rawJsonMatch[1];
             } else {
-              // Try to find a raw JSON object
-              const rawJsonMatch = rawText.match(/(\{[\s\S]*\})/);
-              if (rawJsonMatch) {
-                jsonStr = rawJsonMatch[1];
-              } else {
-                // If no JSON found, clean the text and try again
-                jsonStr = rawText
-                  .replace(/```json/g, "")
-                  .replace(/```/g, "")
-                  .trim();
-              }
+              jsonStr = rawText
+                .replace(/```json/g, "")
+                .replace(/```/g, "")
+                .trim();
             }
+          }
 
-            // Parse the JSON string
-            analysisResult = JSON.parse(jsonStr);
+          analysisResult = JSON.parse(jsonStr);
 
-            // Validate and enhance response data
-            // Ensure all required fields exist with the correct types
-            const requiredFields = [
-              "metaTagsScore",
-              "contentScore",
-              "performanceScore",
-              "mobileScore",
-              "issues",
-              "recommendations",
-              "metaTagsDetails",
-              "contentDetails",
-              "technicalDetails",
-            ];
+          const requiredFields = [
+            "metaTagsScore",
+            "contentScore",
+            "performanceScore",
+            "mobileScore",
+            "issues",
+            "recommendations",
+            "metaTagsDetails",
+            "contentDetails",
+            "technicalDetails",
+          ];
 
-            // Type checking and fixing
-            for (const field of requiredFields) {
-              if (!(field in analysisResult)) {
-                if (field.endsWith("Score")) {
-                  analysisResult[field] = 60; // Default to medium score instead of 0
-                } else {
-                  analysisResult[field] = [];
-                }
-              }
-
-              // Ensure scores are numbers between 0-100
-              if (
-                field.endsWith("Score") &&
-                typeof analysisResult[field] === "string"
-              ) {
-                analysisResult[field] =
-                  parseInt(analysisResult[field], 10) || 60;
-              }
-
-              // Cap scores between 0-100
+          for (const field of requiredFields) {
+            if (!(field in analysisResult)) {
               if (field.endsWith("Score")) {
-                analysisResult[field] = Math.max(
-                  0,
-                  Math.min(100, analysisResult[field])
-                );
+                analysisResult[field] = 60;
+              } else {
+                analysisResult[field] = [];
               }
             }
 
-            // Ensure arrays have the correct structure
-            const validateArray = (arr: any[], template: any) => {
-              if (!Array.isArray(arr)) return [];
-              return arr.filter((item) => {
-                return (
-                  typeof item === "object" &&
-                  Object.keys(template).every((key) => key in item)
-                );
-              });
-            };
+            if (
+              field.endsWith("Score") &&
+              typeof analysisResult[field] === "string"
+            ) {
+              analysisResult[field] = parseInt(analysisResult[field], 10) || 60;
+            }
 
-            analysisResult.issues = validateArray(analysisResult.issues, {
+            if (field.endsWith("Score")) {
+              analysisResult[field] = Math.max(
+                0,
+                Math.min(100, analysisResult[field])
+              );
+            }
+          }
+
+          const validateArray = (
+            arr: unknown[],
+            template: Record<string, unknown>
+          ) => {
+            if (!Array.isArray(arr)) return [];
+            return arr.filter((item) => {
+              return (
+                typeof item === "object" &&
+                Object.keys(template).every(
+                  (key) => key in (item as Record<string, unknown>)
+                )
+              );
+            });
+          };
+
+          analysisResult.issues = validateArray(analysisResult.issues, {
+            title: "",
+            description: "",
+            severity: "",
+          });
+          analysisResult.recommendations = validateArray(
+            analysisResult.recommendations,
+            {
               title: "",
               description: "",
-              severity: "",
-            });
-            analysisResult.recommendations = validateArray(
-              analysisResult.recommendations,
-              { title: "", description: "", impact: "" }
-            );
-            analysisResult.metaTagsDetails = validateArray(
-              analysisResult.metaTagsDetails,
-              { name: "", value: "", status: "" }
-            );
-            analysisResult.contentDetails = validateArray(
-              analysisResult.contentDetails,
-              { name: "", value: "", status: "" }
-            );
-            analysisResult.technicalDetails = validateArray(
-              analysisResult.technicalDetails,
-              { name: "", value: "", status: "" }
-            );
+              impact: "",
+            }
+          );
+          analysisResult.metaTagsDetails = validateArray(
+            analysisResult.metaTagsDetails,
+            {
+              name: "",
+              value: "",
+              status: "",
+            }
+          );
+          analysisResult.contentDetails = validateArray(
+            analysisResult.contentDetails,
+            {
+              name: "",
+              value: "",
+              status: "",
+            }
+          );
+          analysisResult.technicalDetails = validateArray(
+            analysisResult.technicalDetails,
+            {
+              name: "",
+              value: "",
+              status: "",
+            }
+          );
 
-            // Add URL to the result
-            analysisResult.url = url;
-          } catch (jsonError) {
-            console.error("JSON parsing error:", jsonError);
-            // Fallback to comprehensive object with error info
-            analysisResult = {
-              metaTagsScore: 60,
-              contentScore: 60,
-              performanceScore: 60,
-              mobileScore: 60,
-              issues: [
-                {
-                  title: "Analysis Format Error",
-                  description:
-                    "We couldn't generate a complete analysis format. The results shown are partial and may not reflect the full SEO status of your website.",
-                  severity: "medium",
-                },
-              ],
-              recommendations: [
-                {
-                  title: "Try a Focused Analysis",
-                  description:
-                    "For better results, try analyzing specific aspects of your website separately, such as meta tags or content structure.",
-                  impact: "medium",
-                },
-                {
-                  title: "Manual SEO Audit",
-                  description:
-                    "Consider performing a manual SEO audit using tools like Google Search Console, PageSpeed Insights, or SEMrush for more detailed results.",
-                  impact: "high",
-                },
-              ],
-              metaTagsDetails: [],
-              contentDetails: [],
-              technicalDetails: [],
-              url: url,
-            };
-          }
-        } else {
-          throw new Error("No text content in Gemini response");
+          analysisResult.url = url;
+        } catch (jsonError) {
+          console.error("JSON parsing error:", jsonError);
+          analysisResult = {
+            metaTagsScore: 60,
+            contentScore: 60,
+            performanceScore: 60,
+            mobileScore: 60,
+            issues: [
+              {
+                title: "Analysis Format Error",
+                description:
+                  "We couldn't generate a complete analysis format. The results shown are partial and may not reflect the full SEO status of your website.",
+                severity: "medium",
+              },
+            ],
+            recommendations: [
+              {
+                title: "Try a Focused Analysis",
+                description:
+                  "For better results, try analyzing specific aspects of your website separately, such as meta tags or content structure.",
+                impact: "medium",
+              },
+            ],
+            metaTagsDetails: [],
+            contentDetails: [],
+            technicalDetails: [],
+            url: url,
+          };
         }
-      } catch (e) {
-        console.error("Failed to parse Gemini response as JSON:", e);
-        analysisResult = {
-          metaTagsScore: 50,
-          contentScore: 50,
-          performanceScore: 50,
-          mobileScore: 50,
-          issues: [
-            {
-              title: "Analysis Error",
-              description:
-                "We encountered an error while analyzing your website. This could be due to complex website structure or API limitations.",
-              severity: "high",
-            },
-          ],
-          recommendations: [
-            {
-              title: "Try Again Later",
-              description:
-                "Our AI analysis system may be experiencing high demand. Please try again in a few minutes.",
-              impact: "medium",
-            },
-            {
-              title: "Use Alternative SEO Tools",
-              description:
-                "Consider using specialized SEO tools like Ahrefs, Moz, or Google PageSpeed Insights for more reliable analysis.",
-              impact: "high",
-            },
-          ],
-          metaTagsDetails: [],
-          contentDetails: [],
-          technicalDetails: [],
-          url: url,
-        };
+      } else {
+        throw new Error("No text content in Gemini response");
       }
 
-      // Calculate and add overall score
       const scores = [
         analysisResult.metaTagsScore || 0,
         analysisResult.contentScore || 0,
@@ -379,16 +334,26 @@ ${text.slice(0, 12000)}
       );
 
       return analysisResult;
-    } catch (apiError: any) {
+    } catch (apiError) {
       console.error(
         "Gemini API error:",
-        apiError.response?.status,
-        apiError.response?.data || apiError.message
+        (apiError as { response?: { status?: number; data?: unknown } })
+          .response?.status,
+        (apiError as { response?: { data?: unknown } }).response?.data ||
+          (apiError as Error).message
       );
       throw new Error(
-        `Gemini API error: ${apiError.response?.status || "Unknown"} - ${
-          apiError.response?.data?.error?.message || apiError.message
-        }`
+        `Gemini API error: ${
+          (apiError as { response?: { status?: number } }).response?.status ||
+          "Unknown"
+        } - ` +
+          `${
+            (
+              apiError as {
+                response?: { data?: { error?: { message?: string } } };
+              }
+            ).response?.data?.error?.message || (apiError as Error).message
+          }`
       );
     }
   } catch (error) {
