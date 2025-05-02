@@ -9,7 +9,7 @@ export default function Home() {
             VidSage
           </h1>
           <p className="text-xl font-bold">
-            Check your website's SEO performance
+            Check your website&apos;s SEO performance
           </p>
         </div>
 

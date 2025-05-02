@@ -156,7 +156,34 @@ ${text.slice(0, 12000)}
       console.log("Gemini API response status:", geminiResponse.status);
 
       // Parse Gemini response
-      let analysisResult: any = {};
+      let analysisResult: {
+        metaTagsScore: number;
+        contentScore: number;
+        performanceScore: number;
+        mobileScore: number;
+        issues: { title: string; description: string; severity: string }[];
+        recommendations: {
+          title: string;
+          description: string;
+          impact: string;
+        }[];
+        metaTagsDetails: { name: string; value: string; status: string }[];
+        contentDetails: { name: string; value: string; status: string }[];
+        technicalDetails: { name: string; value: string; status: string }[];
+        overallScore?: number;
+        url?: string;
+      } = {
+        metaTagsScore: 0,
+        contentScore: 0,
+        performanceScore: 0,
+        mobileScore: 0,
+        issues: [],
+        recommendations: [],
+        metaTagsDetails: [],
+        contentDetails: [],
+        technicalDetails: [],
+      };
+
       try {
         // Extract text from the response based on Gemini API structure
         const rawText =
@@ -384,22 +411,6 @@ ${text.slice(0, 12000)}
       url,
     };
   }
-}
-
-// Helper functions to extract data from HTML
-function extractTag(html: string, tag: string): string {
-  const regex = new RegExp(`<${tag}[^>]*>(.*?)<\/${tag}>`, "i");
-  const match = html.match(regex);
-  return match ? match[1].trim() : "";
-}
-
-function extractMetaTag(html: string, name: string): string {
-  const regex = new RegExp(
-    `<meta[^>]*name=["']${name}["'][^>]*content=["']([^"']*)["'][^>]*>|<meta[^>]*content=["']([^"']*)["'][^>]*name=["']${name}["'][^>]*>`,
-    "i"
-  );
-  const match = html.match(regex);
-  return match ? (match[1] || match[2] || "").trim() : "";
 }
 
 function stripHtml(html: string): string {

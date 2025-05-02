@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { CheckCircle2, XCircle, AlertCircle, ExternalLink } from "lucide-react";
+import { CheckCircle2, XCircle, AlertCircle } from "lucide-react";
 import { useState } from "react";
 
 function IssueCard({
@@ -30,7 +30,7 @@ function IssueCard({
   const severityLabel = {
     high: "Critical Issue",
     medium: "Moderate Issue",
-    low: "Minor Issue"
+    low: "Minor Issue",
   };
 
   return (
@@ -40,7 +40,11 @@ function IssueCard({
         <div className="flex-1">
           <div className="flex justify-between items-center mb-1">
             <h3 className="text-xl font-bold">{issue.title}</h3>
-            <div className={`neo-badge ${severityBg[issue.severity]} text-white text-sm`}>
+            <div
+              className={`neo-badge ${
+                severityBg[issue.severity]
+              } text-white text-sm`}
+            >
               {severityLabel[issue.severity]}
             </div>
           </div>
@@ -71,14 +75,16 @@ function RecommendationCard({
   const impactLabel = {
     high: "HIGH IMPACT",
     medium: "MEDIUM IMPACT",
-    low: "LOW IMPACT"
+    low: "LOW IMPACT",
   };
 
   return (
     <div className={`neo-card ${rotation}`}>
       <div className="flex justify-between items-start mb-3">
         <h3 className="text-xl font-bold">{recommendation.title}</h3>
-        <div className={`neo-badge ${impactBg[recommendation.impact]} text-white`}>
+        <div
+          className={`neo-badge ${impactBg[recommendation.impact]} text-white`}
+        >
           {impactLabel[recommendation.impact]}
         </div>
       </div>
@@ -124,7 +130,11 @@ function DetailSection({
                 {statusIcon[item.status]}
                 <span className="font-bold text-lg">{item.name}</span>
               </div>
-              <div className={`font-medium max-w-[40%] text-right ${statusClass[item.status]}`}>
+              <div
+                className={`font-medium max-w-[40%] text-right ${
+                  statusClass[item.status]
+                }`}
+              >
                 {item.value}
               </div>
             </div>
@@ -135,7 +145,37 @@ function DetailSection({
   );
 }
 
-export function TabsContainer({ results }: any) {
+export function TabsContainer({
+  results,
+}: {
+  results: {
+    issues: {
+      title: string;
+      description: string;
+      severity: "high" | "medium" | "low";
+    }[];
+    recommendations: {
+      title: string;
+      description: string;
+      impact: "high" | "medium" | "low";
+    }[];
+    metaTagsDetails: {
+      name: string;
+      value: string;
+      status: "good" | "warning" | "bad";
+    }[];
+    contentDetails: {
+      name: string;
+      value: string;
+      status: "good" | "warning" | "bad";
+    }[];
+    technicalDetails: {
+      name: string;
+      value: string;
+      status: "good" | "warning" | "bad";
+    }[];
+  };
+}) {
   const [activeTab, setActiveTab] = useState("issues");
 
   return (
@@ -174,8 +214,8 @@ export function TabsContainer({ results }: any) {
               <CheckCircle2 className="h-16 w-16 text-[#00C853] mx-auto mb-4" />
               <p className="text-2xl font-bold">No critical issues found!</p>
               <p className="text-lg">
-                Your website is performing well, but check the recommendations for
-                further improvements.
+                Your website is performing well, but check the recommendations
+                for further improvements.
               </p>
             </div>
           ) : (

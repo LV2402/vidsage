@@ -1,14 +1,17 @@
 import { analyzeSeo } from "@/app/actions";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, XCircle } from "lucide-react";
+import Link from "next/link";
 import { TabsContainer } from "./seo-tabs";
 
 export async function SeoResults({ url }: { url: string }) {
   const results = await analyzeSeo(url);
 
   // Special case for access errors and other critical issues
-  if (results.issues.length > 0 && 
-      (results.issues[0].title === "Access Forbidden" || 
-       results.issues[0].title === "Analysis Error")) {
+  if (
+    results.issues.length > 0 &&
+    (results.issues[0].title === "Access Forbidden" ||
+      results.issues[0].title === "Analysis Error")
+  ) {
     return (
       <div className="neo-card bg-white text-center p-8 rotate-1">
         <div className="flex justify-center mb-6">
@@ -26,13 +29,15 @@ export async function SeoResults({ url }: { url: string }) {
   }
 
   // Calculate overall score
-  const overallScore = results.overallScore || Math.round(
-    (results.metaTagsScore +
-      results.contentScore +
-      results.performanceScore +
-      results.mobileScore) /
-      4
-  );
+  const overallScore =
+    results.overallScore ||
+    Math.round(
+      (results.metaTagsScore +
+        results.contentScore +
+        results.performanceScore +
+        results.mobileScore) /
+        4
+    );
 
   const getScoreColor = (score: number) => {
     if (score >= 80) return "text-[#00C853]";
@@ -110,27 +115,33 @@ export async function SeoResults({ url }: { url: string }) {
       <div className="neo-card bg-white -rotate-1 p-6">
         <h3 className="text-2xl font-bold mb-4">SEO Summary</h3>
         <p className="font-medium text-lg mb-4">
-          {overallScore >= 80 ? 
-            "This website demonstrates strong SEO practices with well-structured content and metadata. Minor improvements could still enhance its performance." :
-            overallScore >= 60 ?
-            "This website has a solid SEO foundation but requires attention to several key areas to improve search engine visibility and ranking potential." :
-            "This website needs significant SEO improvements across multiple areas to enhance its search engine visibility and ranking potential."
-          }
+          {overallScore >= 80
+            ? "This website demonstrates strong SEO practices with well-structured content and metadata. Minor improvements could still enhance its performance."
+            : overallScore >= 60
+            ? "This website has a solid SEO foundation but requires attention to several key areas to improve search engine visibility and ranking potential."
+            : "This website needs significant SEO improvements across multiple areas to enhance its search engine visibility and ranking potential."}
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <h4 className="font-bold text-lg mb-2">Strengths</h4>
             <ul className="list-disc pl-5 space-y-1">
-              {results.metaTagsScore >= 70 && <li>Solid meta tag implementation</li>}
+              {results.metaTagsScore >= 70 && (
+                <li>Solid meta tag implementation</li>
+              )}
               {results.contentScore >= 70 && <li>Quality content structure</li>}
-              {results.performanceScore >= 70 && <li>Good performance indicators</li>}
+              {results.performanceScore >= 70 && (
+                <li>Good performance indicators</li>
+              )}
               {results.mobileScore >= 70 && <li>Mobile-friendly design</li>}
-              {results.issues.length === 0 && <li>No critical issues detected</li>}
-              {(results.metaTagsScore < 70 && 
-                results.contentScore < 70 && 
-                results.performanceScore < 70 && 
-                results.mobileScore < 70) && 
-                <li>Website has potential for significant improvement</li>}
+              {results.issues.length === 0 && (
+                <li>No critical issues detected</li>
+              )}
+              {results.metaTagsScore < 70 &&
+                results.contentScore < 70 &&
+                results.performanceScore < 70 &&
+                results.mobileScore < 70 && (
+                  <li>Website has potential for significant improvement</li>
+                )}
             </ul>
           </div>
           <div>
@@ -139,8 +150,9 @@ export async function SeoResults({ url }: { url: string }) {
               {results.recommendations.slice(0, 3).map((rec, index) => (
                 <li key={index}>{rec.title}</li>
               ))}
-              {results.recommendations.length === 0 && 
-                <li>Maintain current SEO practices</li>}
+              {results.recommendations.length === 0 && (
+                <li>Maintain current SEO practices</li>
+              )}
             </ul>
           </div>
         </div>

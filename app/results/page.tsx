@@ -49,7 +49,7 @@ function LoadingResults() {
       <Loader2 className="h-16 w-16 animate-spin mx-auto text-[#FF5757]" />
       <p className="text-2xl font-bold">Analyzing website SEO...</p>
       <p className="text-lg font-medium max-w-md mx-auto">
-        We're crawling the website, analyzing its content, and generating
+        We&apos;re crawling the website, analyzing its content, and generating
         recommendations. This may take a moment.
       </p>
     </div>

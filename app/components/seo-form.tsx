@@ -25,7 +25,7 @@ export function SeoForm() {
     try {
       new URL(formattedUrl); // Validate URL
       router.push(`/results?url=${encodeURIComponent(formattedUrl)}`);
-    } catch (err) {
+    } catch {
       setError("Please enter a valid URL");
     }
   };
