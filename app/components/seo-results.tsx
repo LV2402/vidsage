@@ -3,8 +3,90 @@ import { ExternalLink, XCircle } from "lucide-react";
 import Link from "next/link";
 import { TabsContainer } from "./seo-tabs";
 
-export async function SeoResults({ url }: { url: string }) {
-  const results = await analyzeSeo(url);
+interface SeoResult {
+  issues: Array<{
+    title: string;
+    description: string;
+    severity: "high" | "medium" | "low";
+  }>;
+  recommendations: Array<{
+    title: string;
+    description: string;
+    impact: "high" | "medium" | "low";
+  }>;
+  metaTagsScore: number;
+  contentScore: number;
+  performanceScore: number;
+  mobileScore: number;
+  overallScore?: number;
+  metaTagsDetails: Array<{
+    tag: string;
+    status: string;
+  }>;
+  contentDetails: Array<{
+    section: string;
+    status: string;
+  }>;
+  technicalDetails: Array<{
+    aspect: string;
+    status: string;
+  }>;
+}
+
+interface ScoreCardProps {
+  title: string;
+  score: number;
+  rotation: string;
+}
+
+interface SeoResultsProps {
+  url: string;
+}
+
+export async function SeoResults({ url }: SeoResultsProps) {
+  const rawResults = await analyzeSeo(url);
+  
+  // Validate and normalize scores
+  const normalizeScore = (score: string | number | null | undefined): number => {
+    const num = Number(score);
+    return !isNaN(num) ? Math.min(Math.max(Math.round(num), 0), 100) : 0;
+  };
+
+  const results: SeoResult = {
+    ...rawResults,
+    metaTagsScore: normalizeScore(rawResults.metaTagsScore),
+    contentScore: normalizeScore(rawResults.contentScore),
+    performanceScore: normalizeScore(rawResults.performanceScore),
+    mobileScore: normalizeScore(rawResults.mobileScore),
+    issues: (rawResults.issues || []).map((issue) => ({
+      ...issue,
+      title: issue.title || "Unknown Issue",
+      description: issue.description || "No description provided",
+      severity: (issue.severity && ["high", "medium", "low"].includes(issue.severity.toLowerCase()))
+        ? (issue.severity.toLowerCase() as "high" | "medium" | "low")
+        : "low",
+    })),
+    recommendations: (rawResults.recommendations || []).map((rec) => ({
+      ...rec,
+      title: rec.title || "Unknown Recommendation",
+      description: rec.description || "No description provided",
+      impact: (rec.impact && ["high", "medium", "low"].includes(rec.impact.toLowerCase()))
+        ? (rec.impact.toLowerCase() as "high" | "medium" | "low")
+        : "low",
+    })),
+    metaTagsDetails: (rawResults.metaTagsDetails || []).map(detail => ({
+      tag: detail.name || "Unknown Tag",
+      status: detail.status || "bad"
+    })),
+    contentDetails: (rawResults.contentDetails || []).map(detail => ({
+      section: detail.name || "Unknown Section",
+      status: detail.status || "bad"
+    })),
+    technicalDetails: (rawResults.technicalDetails || []).map(detail => ({
+      aspect: detail.name || "Unknown Aspect",
+      status: detail.status || "bad"
+    }))
+  };
 
   // Special case for access errors and other critical issues
   if (
@@ -35,23 +117,22 @@ export async function SeoResults({ url }: { url: string }) {
       (results.metaTagsScore +
         results.contentScore +
         results.performanceScore +
-        results.mobileScore) /
-        4
+        results.mobileScore) / 4
     );
 
-  const getScoreColor = (score: number) => {
+  const getScoreColor = (score: number): string => {
     if (score >= 80) return "text-[#00C853]";
     if (score >= 60) return "text-[#FFB300]";
     return "text-[#FF5757]";
   };
 
-  const getScoreBg = (score: number) => {
+  const getScoreBg = (score: number): string => {
     if (score >= 80) return "bg-[#00C853]";
     if (score >= 60) return "bg-[#FFB300]";
     return "bg-[#FF5757]";
   };
 
-  const getScoreLabel = (score: number) => {
+  const getScoreLabel = (score: number): string => {
     if (score >= 80) return "EXCELLENT";
     if (score >= 70) return "GOOD";
     if (score >= 60) return "AVERAGE";
@@ -158,27 +239,42 @@ export async function SeoResults({ url }: { url: string }) {
         </div>
       </div>
 
-      <TabsContainer results={results} />
+      <TabsContainer
+        results={{
+          ...results,
+          metaTagsDetails: results.metaTagsDetails.map((detail) => ({
+            name: detail.tag,
+            value: "N/A", // Provide a default value or map appropriately
+            status: (["good", "warning", "bad"] as const).includes(detail.status as "good" | "warning" | "bad")
+              ? (detail.status as "good" | "warning" | "bad")
+              : "bad"
+          })),
+          contentDetails: results.contentDetails.map((detail) => ({
+            name: detail.section,
+            value: "N/A", // Provide a default value
+            status: detail.status === "good" ? "good" : "bad"
+          })),
+          technicalDetails: results.technicalDetails.map((detail) => ({
+            name: detail.aspect,
+            value: "N/A", // Provide a default value
+            status: (["good", "warning", "bad"] as const).includes(detail.status as "good" | "warning" | "bad")
+              ? (detail.status as "good" | "warning" | "bad")
+              : "bad"
+          }))
+        }}
+      />
     </div>
   );
 }
 
-function ScoreCard({
-  title,
-  score,
-  rotation,
-}: {
-  title: string;
-  score: number;
-  rotation: string;
-}) {
-  const getBg = (score: number) => {
+function ScoreCard({ title, score, rotation }: ScoreCardProps) {
+  const getBg = (score: number): string => {
     if (score >= 80) return "bg-[#00C853]";
     if (score >= 60) return "bg-[#FFB300]";
     return "bg-[#FF5757]";
   };
 
-  const getLabel = (score: number) => {
+  const getLabel = (score: number): string => {
     if (score >= 80) return "GOOD";
     if (score >= 60) return "FAIR";
     return "POOR";
