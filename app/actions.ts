@@ -72,23 +72,8 @@ interface AnalysisResult {
   url?: string;
 }
 
-interface GeminiResponseContent {
-  parts: { text: string }[];
-}
+// Removed unused interface GeminiResponseContent
 
-interface GeminiResponseCandidate {
-  content: GeminiResponseContent;
-}
-
-interface GeminiApiResponse {
-  candidates?: GeminiResponseCandidate[];
-  data?: {
-    candidates?: GeminiResponseCandidate[];
-    error?: {
-      message?: string;
-    };
-  };
-}
 
 export async function analyzeSeo(url: string) {
   console.log(`Starting SEO analysis for: ${url}`);
@@ -263,49 +248,30 @@ ${text.slice(0, 12000)}
           for (const field of requiredFields) {
             if (!(field in analysisResult)) {
               if (field.endsWith("Score")) {
-                (analysisResult as Record<string, number | unknown[]>)[
-                  field
-                ] = 60;
+                // Safe type assertion using type intersection
+                (analysisResult as AnalysisResult & Record<string, number>)[field] = 60;
               } else {
-                (analysisResult as Record<string, number | unknown[]>)[field] =
-                  [];
+                // Safe type assertion for array fields
+                (analysisResult as AnalysisResult & Record<string, unknown[]>)[field] = [];
               }
-            }
-
-            if (
-              field.endsWith("Score") &&
-              typeof (analysisResult as Record<string, number | string>)[
-                field
-              ] === "string"
-            ) {
-              const scoreField = field as keyof Pick<
-                AnalysisResult,
-                | "metaTagsScore"
-                | "contentScore"
-                | "performanceScore"
-                | "mobileScore"
-              >;
-              (analysisResult as Record<string, number>)[scoreField] =
-                parseInt(
-                  (analysisResult as Record<string, string>)[field],
-                  10
-                ) || 60;
             }
 
             if (field.endsWith("Score")) {
               const scoreField = field as keyof Pick<
                 AnalysisResult,
-                | "metaTagsScore"
-                | "contentScore"
-                | "performanceScore"
-                | "mobileScore"
+                "metaTagsScore" | "contentScore" | "performanceScore" | "mobileScore"
               >;
-              (analysisResult as Record<string, number>)[scoreField] = Math.max(
+              
+              // Handle string scores by parsing them
+              const currentValue = ((analysisResult as unknown) as Record<string, unknown>)[scoreField];
+              const numericScore = typeof currentValue === "string" 
+                ? parseInt(currentValue, 10) || 60 
+                : (typeof currentValue === "number" ? currentValue : 60);
+
+              // Safely assign the normalized score
+              (analysisResult as AnalysisResult)[scoreField] = Math.max(
                 0,
-                Math.min(
-                  100,
-                  (analysisResult as Record<string, number>)[scoreField]
-                )
+                Math.min(100, numericScore)
               );
             }
           }
@@ -314,13 +280,19 @@ ${text.slice(0, 12000)}
             [key: string]: string;
           }
 
+          interface Issue extends ValidatedItem {
+            title: string;
+            description: string;
+            severity: string; // Changed from literal type to allow any string value
+          }
+
           interface Issue {
             title: string;
             description: string;
             severity: string; // Changed from literal type to allow any string value
           }
 
-          interface Recommendation {
+          interface Recommendation extends ValidatedItem {
             title: string;
             description: string;
             impact: string; // Changed from literal type to allow any string value
@@ -330,6 +302,7 @@ ${text.slice(0, 12000)}
             name: string;
             value: string;
             status: string; // Changed from literal type to allow any string value
+            [key: string]: string; // Added index signature to satisfy ValidatedItem constraint
           }
 
           // Generic validator with better type checking for literal string values

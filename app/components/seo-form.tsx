@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -8,7 +8,8 @@ export function SeoForm() {
   const [error, setError] = useState("");
   const router = useRouter();
 
-  const handleAnalyze = () => {
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
     if (!url) {
       setError("Please enter a URL");
       return;
@@ -23,7 +24,7 @@ export function SeoForm() {
     }
 
     try {
-      new URL(formattedUrl); // Validate URL
+      new URL(formattedUrl);
       router.push(`/results?url=${encodeURIComponent(formattedUrl)}`);
     } catch {
       setError("Please enter a valid URL");
@@ -36,23 +37,26 @@ export function SeoForm() {
         <label htmlFor="url" className="block text-xl font-bold">
           Website URL
         </label>
-        <div className="flex flex-col md:flex-row gap-4">
+        <form onSubmit={handleSubmit} className="flex flex-col md:flex-row gap-4">
           <input
             id="url"
             type="text"
-            placeholder="example.com"
-            className="neo-input flex-1 text-lg"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
+            placeholder="example.com"
+            className="neo-input flex-1 text-lg"
+            aria-label="Enter website URL"
           />
-          <button
-            onClick={handleAnalyze}
+          <button 
+            type="submit"
             className="neo-button bg-[#FF5757] text-lg uppercase"
           >
             Analyze SEO
           </button>
-        </div>
-        {error && <p className="text-[#FF5757] font-bold">{error}</p>}
+        </form>
+        {error && (
+          <p className="text-[#FF5757] font-medium">{error}</p>
+        )}
       </div>
     </div>
   );

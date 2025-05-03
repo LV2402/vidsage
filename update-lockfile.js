@@ -6,7 +6,7 @@ console.log("🔄 Starting lockfile update process...");
 
 try {
   // Run pnpm install with no frozen lockfile to update the lockfile
-  console.log("📦 Running pnpm install to update lockfile...");
+  console.log("📦 Running npm install to update lockfile...");
   execSync("pnpm install --no-frozen-lockfile", { stdio: "inherit" });
 
   console.log("✅ Lockfile updated successfully!");
